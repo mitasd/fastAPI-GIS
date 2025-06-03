@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+    <title>Lokacije Geomehanika</title>
+
+    <style>
+      html,
+      body {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+      }
+    
+      #viewDiv {
+        height: 69%;
+        width: 100%;
+      }
+      #basemapStyles {
+        width: 250px;
+        padding: 10px;
+      }
+      .container {
+        height: 30%;
+        width: 100%;
+      }
+    </style>
+
+    <link rel="stylesheet" href="https://js.arcgis.com/4.28/esri/themes/light/main.css">
+    <script src="https://js.arcgis.com/4.28/"></script>
+    <script type="module" src="https://js.arcgis.com/calcite-components/1.9.2/calcite.esm.js"></script>
+    <link rel="stylesheet" type="text/css" href="https://js.arcgis.com/calcite-components/1.9.2/calcite.css" />
+    <script>
+      require([ 
+        "esri/config",
+        "esri/Map",
+        "esri/views/MapView",
+        "esri/widgets/ScaleBar",
+        "esri/widgets/Legend",
+        "esri/widgets/Search",
+        "esri/widgets/Locate",
+        "esri/widgets/Compass",
+        "esri/geometry/Extent",
+        "esri/widgets/FeatureTable",
+        "esri/layers/GeoJSONLayer",
+        "esri/renderers/UniqueValueRenderer",
+        "esri/symbols/SimpleMarkerSymbol",
+        "esri/widgets/Popup"
+      ], function(esriConfig, Map, MapView, ScaleBar, Legend, Search, Locate, Compass, Extent, FeatureTable, GeoJSONLayer,UniqueValueRenderer,SimpleMarkerSymbol,Popup) {
+        esriConfig.apiKey = "AAPK3fb425d3e32d4274908378b91b7b4b1e_SVq4iqQkTJmgzBx09upjG-EXOPSrlsQktStW4xAGCxQ_SsT1ImqA6Ib0WVioTbE";
+
+        const map = new Map({
+          basemap: "arcgis/imagery",
+          ground: "world-elevation",
+        });
+
+        const serbiaExtent = new Extent({
+          xmin: 18.8293,
+          ymin: 42.2450,
+          xmax: 23.0067,
+          ymax: 46.1817,
+          spatialReference: {
+            wkid: 4326
+          }
+        });
+
+        const view = new MapView({
+          container: "viewDiv", 
+          map: map,
+          extent: serbiaExtent,
+        });
+   
+        let compass = new Compass({
+          view: view
+        });
+
+        view.ui.add(compass, "top-left");
+
+        const locate = new Locate({
+          view: view,
+          useHeadingEnabled: false,
+          goToOverride: function(view, options) {
+            options.target.scale = 1500;
+            return view.goTo(options.target);
+          }
+        });
+
+        view.ui.add(locate, "top-left");
+
+        
+        const popup = new Popup({
+           view: view,
+          defaultPopupTemplateEnabled: true
+            });
+        
+        view.popup = popup;
+
+        
+        const search = new Search({
+          view: view
+        });
+
+        const scalebar = new ScaleBar({
+          view: view
+        });
+
+        view.ui.add(scalebar, "bottom-left");
+
+        const legend = new Legend({
+          view: view,
+          container: "legendDiv"
+        });
+
+        view.ui.add(legend, "top-right");
+        view.ui.add(search, "bottom-left");
+
+        const labelClass = {
+          // autocasts as new LabelClass()
+          symbol: {
+            type: "text", // autocasts as new TextSymbol()
+            color: "yellow",
+            font: {
+              // autocast as new Font()
+              family: "Playfair Display",
+              size: 12,
+              weight: "bold"
+            }
+          },
+          labelPlacement: "above-center",
+          labelExpressionInfo: {
+            expression: "$feature.broj_parcele"
+          }
+        };
+
+        const geojsonUrl = "http://127.0.0.1:8000/lokacije";
+
+        const featureLayer = new GeoJSONLayer({
+          url: geojsonUrl,
+          renderer: createUniqueValueRenderer(),
+          labelingInfo: [labelClass],
+          popupTemplate: {
+            title: "{Projektant}",
+            content: "Elaborat: {Elaborat}<br>Datum: {Datum}<br>Projektant: {Projektant}<br>Broj parcele: {broj_parcele}<br>Katastarska opština: {Katastarska_opstina}<br>Investitor: {Investitor}"
+          }
+        });
+
+      function createUniqueValueRenderer() {
+        return new UniqueValueRenderer({
+          field: "Projektant",
+          uniqueValueInfos: [
+            { value: "Dusan Katic", symbol: createSymbol("red") },
+            { value: "Ivica Ivandic", symbol: createSymbol("blue") },
+            { value: "Jelena Ivanovic Bartul", symbol: createSymbol("green") },
+            { value: "Aleksandar Stoiljkovic", symbol: createSymbol("yellow") },
+            { value: "Anka Milic", symbol: createSymbol("orange") },
+            { value: "Igor Stefanovic", symbol: createSymbol("black") },
+            { value: "Dimitrije Gajin", symbol: createSymbol("purple") },
+            { value: "Snezana Paunovic", symbol: createSymbol([113,250,205]) },
+            { value: "Bojan Stanivuk", symbol: createSymbol([113,250,205]) },
+
+            // Add more values and symbols as needed
+          ],
+          defaultSymbol: createSymbol([255,74,245])
+        });
+      }
+
+      function createSymbol(color) {
+        return new SimpleMarkerSymbol({
+          color: color,
+          size: "8px",
+          outline: {
+            color: "black",
+            width: 1
+          }
+        });
+      }
+        map.add(featureLayer);
+
+        const featureTable = new FeatureTable({
+          view: view,
+          layer: featureLayer,
+          multiSortEnabled: true,
+          editingEnabled: true,
+          tableTemplate: {
+            columnTemplates: [
+            {
+                type: "field",
+                fieldName: "broj_foldera",
+                label: "broj_foldera"
+              },
+              {
+                type: "field",
+                fieldName: "Elaborat",
+                label: "Elaborat"
+              },
+              {
+                type: "field",
+                fieldName: "Datum",
+                label: "Datum"
+              },
+              {
+                type: "field",
+                fieldName: "Projektant",
+                label: "Projektant"
+              },
+              {
+                type: "field",
+                fieldName: "broj_parcele",
+                label: "Broj parcele"
+              },
+              {
+                type: "field",
+                fieldName: "Katastarska_opstina",
+                label: "Katastarska opština"
+              },
+              {
+                type: "field",
+                fieldName: "Investitor",
+                label: "Investitor"
+              },
+            ]
+          },
+          container: document.getElementById("tableDiv")
+        });
+
+        view.ui.add(featureTable, "bottom");
+
+        const basemapStylesDiv = document.getElementById("basemapStyles");
+        view.ui.add(basemapStylesDiv, "bottom-right");
+
+        const styleCombobox = document.getElementById("styleCombobox");
+        styleCombobox.addEventListener("calciteComboboxChange", (event) => {
+          updateBasemapStyle(event.target.value);
+        });
+
+        function updateBasemapStyle(basemapId) {
+          view.map.basemap = basemapId;
+        }
+
+      });
+    </script>
+  </head>
+  <body>
+    <div id="viewDiv"></div>
+    <div class="container">
+      <div id="tableDiv"></div>
+    </div>
+    <div id="basemapStyles" class="esri-widget">
+      <calcite-label>Basemap style</calcite-label>
+      <calcite-combobox id="styleCombobox" selection-mode="single" clear-disabled>
+        <calcite-combobox-item value="arcgis/streets" text-label="arcgis/streets"></calcite-combobox-item>
+        <calcite-combobox-item value="arcgis/imagery" text-label="arcgis/imagery"></calcite-combobox-item>
+        <calcite-combobox-item value="arcgis/topographic" text-label="arcgis/topographic" selected></calcite-combobox-item>
+        <calcite-combobox-item value="arcgis/terrain" text-label="arcgis/terrain"></calcite-combobox-item>
+        <calcite-combobox-item value="osm/standard-relief" text-label="osm/standard-relief"></calcite-combobox-item>
+        <calcite-combobox-item value="osm/streets" text-label="osm/streets"></calcite-combobox-item>
+        <calcite-combobox-item value="osm/hybrid" text-label="osm/hybrid"></calcite-combobox-item>
+      </calcite-combobox>
+    </div>
+  </body>
+</html>

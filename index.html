@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+  <meta charset="UTF-8">
+  <title>Projekti</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <style>
+    .table-container {
+      max-height: 600px;
+      overflow-y: auto;
+      border: 1px solid #dee2e6;
+    }
+    .modal input {
+      margin-bottom: 10px;
+    }
+    .modal-header {
+      background-color: #f8f9fa;
+      border-bottom: 1px solid #dee2e6;
+    }
+    .modal-footer {
+      background-color: #f8f9fa;
+      border-top: 1px solid #dee2e6;
+    }
+    .form-control::placeholder {
+      font-style: italic;
+    }
+    .alert-fixed {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 1055;
+    }
+  </style>
+</head>
+<body class="container py-4">
+  
+  <h2 class="mb-4">📁 Spisak geotehničkih projekata</h2>
+  <div class="mb-3">
+    <button class="btn btn-primary" onclick="openAddModal()">➕ Dodaj novi</button>
+  </div>
+
+  <form id="filterForm" class="row g-2 align-items-end mb-4" onsubmit="applyFilter(event)">
+    <div class="col-md-3">
+      <input type="text" name="projektant" class="form-control" placeholder="Projektant">
+    </div>
+    <div class="col-md-3">
+      <input type="text" name="opstina" class="form-control" placeholder="Kat. opština">
+    </div>
+    <div class="col-md-3">
+      <input type="text" name="investitor" class="form-control" placeholder="Investitor">
+    </div>
+    <div class="col-md-2">
+      <select name="godina" id="godina" class="form-select">
+        <option value="">-- Godina --</option>
+      </select>
+    </div>
+    <div class="col-md-1">
+      <button type="submit" class="btn btn-success w-100">🔍</button>
+    </div>
+  </form>
+
+  <div class="table-container mb-4">
+    <table class="table table-bordered table-striped" id="projekti">
+      <thead class="table-light sticky-top">
+        <tr>
+          <th onclick="sortByBrojFoldera()">Broj foldera 🔽</th>          
+          <th>Elaborat</th>
+          <th>Datum</th>
+          <th>Projektant</th>
+          <th>Broj parcele</th>
+          <th>Kat. opština</th>
+          <th>Investitor</th>
+          <th>X</th>
+          <th>Y</th>
+          <th>Akcije</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- Dodaj/Izmeni modal -->
+  <div id="overlay" class="modal fade" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalTitle">Modal</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form id="formModal">
+            <input name="broj_foldera" type="number" class="form-control" placeholder="Broj foldera" required>
+            <input name="Elaborat" type="text" class="form-control" placeholder="Elaborat" required>
+            <input name="Datum" type="text" class="form-control" placeholder="Datum" required>
+            <input name="Projektant" type="text" class="form-control" placeholder="Projektant" required>
+            <input name="broj_parcele" type="text" class="form-control" placeholder="Broj parcele" required>
+            <input name="Katastarska_opstina" type="text" class="form-control" placeholder="Kat. opština" required>
+            <input name="Investitor" type="text" class="form-control" placeholder="Investitor" required>
+            <input name="x" type="number" step="any" class="form-control" placeholder="X" required>
+            <input name="y" type="number" step="any" class="form-control" placeholder="Y" required>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Otkaži</button>
+          <button type="button" class="btn btn-primary" id="saveButton">Sačuvaj</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="alertPlaceholder"></div>
+
+  <script>
+    const API_URL = "http://127.0.0.1:8000";
+    let debounceTimer, currentFolderId = null;
+    const modal = new bootstrap.Modal(document.getElementById("overlay"));
+    const form = document.getElementById("formModal");
+    const title = document.getElementById("modalTitle");
+    const saveBtn = document.getElementById("saveButton");
+
+    function showAlert(message, type = "success") {
+      const alert = document.createElement("div");
+      alert.className = `alert alert-${type} alert-dismissible fade show alert-fixed`;
+      alert.innerHTML = `${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+      document.body.appendChild(alert);
+      setTimeout(() => alert.remove(), 3000);
+    }
+
+    function openAddModal() {
+      form.reset();
+      title.textContent = "Dodaj novi projekat";
+      saveBtn.onclick = addNewProject;
+      modal.show();
+    }
+
+    function openEdit(broj_foldera, btn) {
+      const row = btn.closest("tr");
+      const cells = row.querySelectorAll("td");
+      const fields = ["broj_foldera", "Elaborat", "Datum", "Projektant", "broj_parcele", "Katastarska_opstina", "Investitor", "x", "y"];
+      fields.forEach((f, i) => {
+        let value = cells[i].textContent;
+        if (f === "x" || f === "y") {
+          value = value.replace(",", "."); // u slučaju da iz tabele dođe sa zarezom
+        }
+        form.elements[f].value = value;
+      });
+      currentFolderId = parseInt(cells[0].textContent);
+      title.textContent = "Izmeni projekat";
+      saveBtn.onclick = saveChanges;
+      modal.show();
+    }
+
+    async function saveChanges() {
+      const fokusID = currentFolderId;
+      const noviID = parseInt(form.broj_foldera.value);
+      const data = Object.fromEntries(new FormData(form).entries());
+      data.broj_foldera = noviID;
+      data.x = parseFloat(data.x.replace(",", "."));
+      data.y = parseFloat(data.y.replace(",", "."));
+      if (isNaN(data.x) || isNaN(data.y)) {
+        showAlert("Neispravne koordinate", "danger");
+        return;
+      }
+      console.log("PODACI KOJI SE SALJU:", data);
+
+
+      const res = await fetch(`${API_URL}/lokacije/${currentFolderId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+      });
+
+      if (res.ok) {
+        showAlert("Uspešno izmenjeno");
+        modal.hide();
+        resetFilter(fokusID);
+      } else {
+        showAlert("Greška pri izmeni", "danger");
+      }
+    }
+
+    async function addNewProject() {
+      
+      const formData = new FormData(form);
+      const res = await fetch(`${API_URL}/lokacije`, {
+        method: "POST",
+        body: formData
+      });
+
+      if (res.ok) {
+        showAlert("Uspešno dodat novi unos");
+        modal.hide();
+        resetFilter();
+      } else {
+        showAlert("Greška pri dodavanju", "danger");
+      }
+    }
+
+    async function deleteFeature(broj_foldera) {
+      if (!confirm(`Obrisati folder ${broj_foldera}?`)) return;
+      const res = await fetch(`${API_URL}/lokacije/${broj_foldera}`, { method: "DELETE" });
+      if (res.ok) {
+        showAlert("Obrisano!");
+        resetFilter();
+      } else {
+        showAlert("Greška pri brisanju", "danger");
+      }
+    }
+
+    document.querySelectorAll("#filterForm input").forEach(input => {
+      input.addEventListener("input", () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          applyFilter(new Event("submit"));
+        }, 400);
+      });
+    });
+
+    function applyFilter(e) {
+      if (e) e.preventDefault();
+      const form = document.getElementById("filterForm");
+      const projektant = form.projektant.value;
+      const opstina = form.opstina.value;
+      const investitor = form.investitor.value;
+      const godina = form.godina.value;
+
+      const query = new URLSearchParams();
+      if (projektant) query.append("projektant", projektant);
+      if (opstina) query.append("opstina", opstina);
+      if (investitor) query.append("investitor", investitor);
+      if (godina) query.append("godina", godina);
+
+      loadProjekti(`/lokacije/filter?${query.toString()}`);
+    }
+
+    function resetFilter(scrollToId = null) {
+    document.getElementById("filterForm").reset();
+    loadProjekti("/lokacije", scrollToId);
+    }
+
+    async function loadProjekti(endpoint = "/lokacije", scrollToId = null) {
+      const res = await fetch(`${API_URL}${endpoint}`);
+      const geojson = await res.json();
+      const tbody = document.querySelector("#projekti tbody");
+      tbody.innerHTML = "";
+
+
+      const godineSet = new Set();
+
+      geojson.features.forEach(feature => {
+        const p = feature.properties;
+        const coords = feature.geometry?.coordinates;
+        if (!Array.isArray(coords) || coords.length !== 2) return;
+
+        const [x, y] = coords;
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${p.broj_foldera}</td>
+          <td>${p.Elaborat}</td>
+          <td>${p.Datum}</td>
+          <td>${p.Projektant}</td>
+          <td>${p.broj_parcele}</td>
+          <td>${p.Katastarska_opstina}</td>
+          <td>${p.Investitor}</td>
+          <td>${x}</td>
+          <td>${y}</td>
+          <td>
+            <button class="btn btn-sm btn-outline-primary me-1" onclick="openEdit(${p.broj_foldera}, this)">✏️</button>
+            <button class="btn btn-sm btn-outline-danger me-1" onclick="deleteFeature(${p.broj_foldera})">🗑️</button>
+            <a href="https://www.google.com/maps?q=${y},${x}" class="btn btn-sm btn-outline-success" target="_blank">📍</a>
+          </td>
+        `;
+        if (scrollToId && p.broj_foldera === scrollToId) {
+          setTimeout(() => row.scrollIntoView({ behavior: "smooth", block: "center" }), 200);
+          row.style.backgroundColor = "#e2f0cb"; // svetlo zeleno obeležavanje
+        }
+        tbody.appendChild(row);
+
+        const match = p.Datum.match(/\b(19|20)\d{2}\b/);
+        const god = match ? match[0] : null;
+        if (god) godineSet.add(god);
+      });
+
+      const godinaSelect = document.getElementById("godina");
+      const selected = godinaSelect.value;
+      godinaSelect.innerHTML = '<option value="">-- Godina --</option>';
+      Array.from(godineSet).sort().forEach(g => {
+        const option = document.createElement("option");
+        option.value = g;
+        option.textContent = g;
+        if (g === selected) option.selected = true;
+        godinaSelect.appendChild(option);
+      });
+    }
+
+    loadProjekti();
+
+    let sortAscending = true;
+
+function sortByBrojFoldera() {
+  const table = document.querySelector("#projekti tbody");
+  const rows = Array.from(table.rows);
+
+  rows.sort((a, b) => {
+    const aValue = parseInt(a.cells[0].textContent);
+    const bValue = parseInt(b.cells[0].textContent);
+    return sortAscending ? aValue - bValue : bValue - aValue;
+  });
+
+  // Promeni redosled u DOM-u
+  table.innerHTML = "";
+  rows.forEach(row => table.appendChild(row));
+
+  // Zameni smer za sledeći klik
+  sortAscending = !sortAscending;
+
+  // Ažuriraj strelicu
+  document.querySelector("th").innerHTML = `Broj foldera ${sortAscending ? "🔽" : "🔼"}`;
+}
+
+
+  </script>
+</body>
+</html>
