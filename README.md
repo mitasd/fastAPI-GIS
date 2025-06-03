@@ -65,6 +65,10 @@ uvicorn app:app --reload
 
     Open index.html or mapa.html in your browser to interact with the API.
 
+
+
+
+
 Option 2: Docker (optional)
 
 Build and run with Docker:
