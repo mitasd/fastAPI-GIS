@@ -69,7 +69,7 @@ uvicorn app:app --reload
 
 
 
-Option 2: Docker (optional)
+### Option 2: Docker (optional)
 
 Build and run with Docker:
 
